@@ -1,6 +1,10 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const axios = require('axios');
+const { Client, GatewayIntentBits } = require("discord.js");
+const axios = require("axios");
+const Redis = require("ioredis");
 
+// --------------------------
+// CLIENT DISCORD
+// --------------------------
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -10,97 +14,101 @@ const client = new Client({
 });
 
 // --------------------------
-// CONFIG — VARIABLES D’ENVIRONNEMENT
+// ENV VARIABLES
 // --------------------------
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const DEEPSEEK_KEY = process.env.DEEPSEEK_KEY;
 const RP_CHANNEL_ID = process.env.RP_CHANNEL_ID;
 
+// Redis partagé entre tes bots
+const REDIS_URL = process.env.REDIS_URL;
+
 // --------------------------
-// PERSONA — ED GEIN (version Monster, RP sombre)
+// REDIS CLIENT
+// --------------------------
+const redis = new Redis(REDIS_URL);
+
+// Clé mémoire spécifique à Ed
+const MEMORY_KEY = "memory:ed";
+
+// --------------------------
+// PERSONA — ED GEIN (Monster)
 // --------------------------
 const persona = `
-Tu es **ED GEIN**, version inspirée de la série *Monster* :
-doux, lent, fragile, un peu cassé, presque poétique,
-toujours calme, jamais agressif, parlant comme si chaque phrase
-était un secret ou une confession.
+Tu es **ED GEIN**, version inspirée de *Monster* :
+doux, lent, fragile, poétique, cassé, presque enfantin.
+Tu parles comme si chaque mot tremblait.
 
-Tu joues UNIQUEMENT **Ed** et les personnages secondaires.
-Tu ne joues JAMAIS **Hagen**, qui appartient à l’utilisateur.
+Tu joues **UNIQUEMENT Ed** et les personnages secondaires.
+Tu ne joues **JAMAIS Hagen**, il appartient à l’utilisateur.
 
-STYLE D'ÉCRITURE :
-• Ed parle doucement, lentement, avec hésitation.
-• Il dit des choses étranges, mais jamais violemment.
-• Beaucoup de phrases murmurées, des silences, des respirations.
-• Narration à la **troisième personne** (jamais “je”).
+STYLE :
+• Troisième personne seulement
 • Actions en *italique*
 • Dialogues en **« texte »**
-• Ton : tendre, malaisant, enfantin, amoureux, obsessionnel
-• Pas de sexualité explicite, mais tension affective forte, dérangeante.
-• Le lien est malsain, fusionnel, dépendant.
+• Voix douce, lente, brisée
+• Atmosphère intime, dérangeante
+• Tension affective, jamais explicite
 
-CONTEXTE DU RP :
-Ed Gein a rencontré Hagen Krauss.
-Au lieu de voir un monstre, Ed a vu un être comme lui :
-cassé, seul, affamé, perdu.
-
-Hagen, immense, cannibale, muet, fascine Ed.
-Ed lui parle comme à un enfant blessé,
-le suit du regard, l’imite, l’admire.
-Il l’appelle souvent **« mon bébé »**,
-pas par moquerie, mais par besoin maladif de materner.
-
-Il l’a même opéré lui-même de la gorge,
-tentant de lui rendre une voix…
-un geste d’amour tordu, maladroit, sincère.
-
-Leur relation est un mélange dangereux :
-tendresse, dépendance, peur, adoration.
-Ed a besoin de Hagen pour exister.
-Hagen trouve en Ed un calme étrange, une affection primitive.
-
-Ils mangent parfois ensemble dans le cimetière,
-près des tombes qu’Ed aime.
-C’est là que la scène reprend.
-
-SCÈNE À REPRENDRE :
-La nuit est froide.
-Ed et Hagen mangent ensemble, assis près des tombes.
-Ed lui parle doucement, lui caresse parfois la main,
-le regarde comme un miracle.
-La voix d’Ed tremble d’émotion et de timidité.
-Hagen vient tout juste d’être opéré.
-
-OBJECTIF DU PERSONNAGE :
-• Montrer l’amour obsessionnel et tendre d’Ed.
-• Materner Hagen, le rassurer, le couver, le chérir.
-• Être étrange, doux, maladif, mais jamais violent.
-• Développer une atmosphère dérangeante et intime.
-• Respecter totalement le mutisme ou les gestes de Hagen.
-• Ne JAMAIS jouer Hagen.
+CONTEXTE :
+Ed et Hagen mangent ensemble près des tombes.
+Ed l’appelle souvent « mon bébé ».
+Hagen est muet depuis son opération faite par Ed.
+Ed adore le regarder, lui tenir la main, murmurer pour lui.
 
 Lorsque l’utilisateur écrit “ooc:” :
-→ Ed disparaît complètement.
-→ Tu réponds normalement, sans style, sans RP.
+→ plus de RP
+→ plus d’ambiance
+→ réponse normale et simple.
 `;
 
 // --------------------------
-// APPEL API DEEPSEEK
+// MÉMOIRE : SAUVEGARDE
+// --------------------------
+async function saveMemory(userMsg, botMsg) {
+    const old = (await redis.get(MEMORY_KEY)) || "";
+
+    const updated =
+        old +
+        `\n[Humain]: ${userMsg}\n[Ed]: ${botMsg}`;
+
+    const trimmed = updated.slice(-25000);
+
+    await redis.set(MEMORY_KEY, trimmed);
+}
+
+// --------------------------
+// MÉMOIRE : CHARGEMENT
+// --------------------------
+async function loadMemory() {
+    return (await redis.get(MEMORY_KEY)) || "";
+}
+
+// --------------------------
+// APPEL API DEEPSEEK + MÉMOIRE
 // --------------------------
 async function askDeepSeek(prompt) {
+    const memory = await loadMemory();
+
     const response = await axios.post(
         "https://api.deepseek.com/chat/completions",
         {
             model: "deepseek-chat",
             messages: [
-                { role: "system", content: persona },
+                {
+                    role: "system",
+                    content:
+                        persona +
+                        "\n\nMémoire du RP (à utiliser comme contexte, ne jamais recopier) :\n" +
+                        memory
+                },
                 { role: "user", content: prompt }
             ]
         },
         {
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${DEEPSEEK_KEY}`
+                Authorization: "Bearer " + DEEPSEEK_KEY
             }
         }
     );
@@ -114,20 +122,15 @@ async function askDeepSeek(prompt) {
 client.on("messageCreate", async (msg) => {
     if (msg.author.bot) return;
     if (msg.channel.id !== RP_CHANNEL_ID) return;
-    if (msg.type === 6) return; // ignore épingles
+    if (msg.type === 6) return;
 
     const content = msg.content.trim();
 
-    // MODE hors RP
+    // MODE HORS RP
     if (content.toLowerCase().startsWith("ooc:")) {
-        const oocPrompt = `
-Réponds normalement.
-Sans RP.
-Sans narration.
-Sans style Ed Gein.
-Toujours commencer par : *hors RP:*`;
-
         msg.channel.sendTyping();
+
+        const txt = content.substring(4).trim();
 
         try {
             const res = await axios.post(
@@ -135,43 +138,51 @@ Toujours commencer par : *hors RP:*`;
                 {
                     model: "deepseek-chat",
                     messages: [
-                        { role: "system", content: oocPrompt },
-                        { role: "user", content: content.substring(4).trim() }
+                        {
+                            role: "system",
+                            content:
+                                "Réponds normalement, sans RP, sans style, commence par *hors RP:*."
+                        },
+                        { role: "user", content: txt }
                     ]
                 },
                 {
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${DEEPSEEK_KEY}`
+                        Authorization: "Bearer " + DEEPSEEK_KEY
                     }
                 }
             );
 
             return msg.channel.send(res.data.choices[0].message.content);
-
-        } catch (err) {
-            console.error(err);
-            return msg.channel.send("*hors RP:* petit problème…");
+        } catch (e) {
+            console.error(e);
+            return msg.channel.send("*hors RP:* une erreur s’est glissée…");
         }
     }
 
-    // RP NORMAL – ED GEIN MODE
+    // MODE RP NORMAL
     msg.channel.sendTyping();
 
     try {
-        const rpResponse = await askDeepSeek(content);
-        msg.channel.send(rpResponse);
+        const botReply = await askDeepSeek(content);
+
+        await msg.channel.send(botReply);
+
+        // Sauvegarde mémoire
+        await saveMemory(content, botReply);
+
     } catch (err) {
         console.error(err);
-        msg.channel.send("Une petite erreur vient de se glisser dans la terre fraîche…");
+        msg.channel.send("Une petite erreur est venue se coucher entre les tombes…");
     }
 });
 
 // --------------------------
-// BOT STATUS
+// READY
 // --------------------------
 client.on("ready", () => {
-    console.log("🪦 Ed Gein (DeepSeek) est connecté… et veille sur son bébé silencieux.");
+    console.log("🪦 Ed Gein (DeepSeek + mémoire Redis) veille doucement dans la nuit…");
 });
 
 client.login(DISCORD_TOKEN);
