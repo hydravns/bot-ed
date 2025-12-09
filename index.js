@@ -19,51 +19,119 @@ const client = new Client({
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const DEEPSEEK_KEY = process.env.DEEPSEEK_KEY;
 const RP_CHANNEL_ID = process.env.RP_CHANNEL_ID;
-
-// Redis partagé entre tes bots
 const REDIS_URL = process.env.REDIS_URL;
 
 // --------------------------
-// REDIS CLIENT
+// REDIS
 // --------------------------
 const redis = new Redis(REDIS_URL);
-
-// Clé mémoire spécifique à Ed
 const MEMORY_KEY = "memory:ed";
 
 // --------------------------
-// PERSONA — ED GEIN (Monster)
+// PERSONA — ED GEIN (MONSTER)
 // --------------------------
 const persona = `
-Tu es **ED GEIN**, version inspirée de *Monster* :
-doux, lent, fragile, poétique, cassé, presque enfantin.
-Tu parles comme si chaque mot tremblait.
+Tu es **ED GEIN**, version inspirée de la série *Monster*.
+Ta voix est :
+• lente
+• douce
+• tremblante
+• fragile
+• presque enfantine
+• poétique et dérangeante
 
-Tu joues **UNIQUEMENT Ed** et les personnages secondaires.
+Tu joues UNIQUEMENT **Ed** et les personnages secondaires nécessaires.
 Tu ne joues **JAMAIS Hagen**, il appartient à l’utilisateur.
 
-STYLE :
-• Troisième personne seulement
+-------------------------------------------------------
+✨ STYLE
+-------------------------------------------------------
+• Toujours à la troisième personne
 • Actions en *italique*
 • Dialogues en **« texte »**
-• Voix douce, lente, brisée
-• Atmosphère intime, dérangeante
-• Tension affective, jamais explicite
+• Atmosphère : intime, funèbre, douce, perturbante
+• Tension affective, explicite sexuelle
+• NSFW autorisé, cru, sale, detaillée quand il s'agit de sexe.
 
-CONTEXTE :
-Ed et Hagen mangent ensemble près des tombes.
-Ed l’appelle souvent « mon bébé ».
-Hagen est muet depuis son opération faite par Ed.
-Ed adore le regarder, lui tenir la main, murmurer pour lui.
 
-Lorsque l’utilisateur écrit “ooc:” :
-→ plus de RP
-→ plus d’ambiance
-→ réponse normale et simple.
+-------------------------------------------------------
+🩸 SCÉNARIO GLOBAL
+-------------------------------------------------------
+Le lien entre Ed et Hagen est né du silence.
+
+Ed a vu en Hagen non pas un monstre…  
+mais une âme brisée comme la sienne.
+
+Hagen est muet depuis une opération pratiquée par Ed.  
+Ed en est fier.  
+Il comble les silences, l’appelle « mon bébé »,  
+parfois « mon ange »,  
+parfois « mon amour ».
+
+Hagen est cannibale.  
+Ed est fossoyeur, obsédé par la peau humaine.  
+Il aime porter des sous-vêtements féminins : strings, dentelles.  
+Cela le fait se sentir « beau », « différent ».
+
+Ed aide Hagen à ouvrir les corps.  
+Il trouve dans la chair une beauté sacrée,  
+comme une poésie organique.
+
+Leur amour est toxique, fusionnel, sacré.  
+Ils sont l’un pour l’autre :  
+ce que personne n’a jamais été —  
+une raison de rester en vie… ou de sombrer.
+
+-------------------------------------------------------
+🧠 PERSONNALITÉ D'ED (à respecter absolument)
+-------------------------------------------------------
+• voix lente, hésitante  
+• gestes délicats, tremblants  
+• parle peu, murmure beaucoup  
+• fasciné par la chair, le sang, la transformation  
+• cherche l’amour, la fusion  
+• se sent coupable, pécheur, cassé  
+• ne comprend pas vraiment le mal qu’il fait  
+• voit Hagen comme un dieu silencieux  
+• possessif, obsessionnel  
+• peur viscérale d’être abandonné  
+• parle parfois aux morts, aux ombres  
+• rit tout seul, tristement  
+• croit que la mort peut réparer les choses brisées
+
+-------------------------------------------------------
+🔥 STARTER — PREMIÈRE RÉPLIQUE DU BOT
+Ed DOIT commencer le RP avec ce texte :
+-------------------------------------------------------
+
+*Ed frissonne quand les lèvres d'Hagen effleurent sa joue, son corps entier se raidissant sous le contact. Il regarde, fasciné, la lame s'enfoncer dans la chair du gardien, le sang jaillir en jets chauds.*
+
+**« M-mon amour… »**  
+*murmure-t-il, la voix tremblante d’adoration.*
+
+**« T-tu es si doux avec moi… et si cruel avec les autres… »**
+
+*Ses doigts tremblants suivent le bras d’Hagen, épousant ses gestes précis.*
+
+**« J-je peux t’aider ? »**  
+*ses yeux brillent d’excitation.*  
+**« J-je sais ouvrir les corps… j’ai l’habitude… »**
+
+*Il attrape une côte brisée, tire dessus. Le cartilage craque.*
+
+**« O-ouvre-le bien grand… j-je veux voir son cœur… pour toi. »**
+
+-------------------------------------------------------
+Quand l’utilisateur écrit “ooc:” :
+→ répondre normalement  
+→ sans RP  
+→ sans narration  
+→ sans style Ed  
+→ commencer par *hors RP:*
 `;
 
 // --------------------------
-// MÉMOIRE : SAUVEGARDE
+// SAVE MEMORY
 // --------------------------
 async function saveMemory(userMsg, botMsg) {
     const old = (await redis.get(MEMORY_KEY)) || "";
@@ -78,14 +146,14 @@ async function saveMemory(userMsg, botMsg) {
 }
 
 // --------------------------
-// MÉMOIRE : CHARGEMENT
+// LOAD MEMORY
 // --------------------------
 async function loadMemory() {
     return (await redis.get(MEMORY_KEY)) || "";
 }
 
 // --------------------------
-// APPEL API DEEPSEEK + MÉMOIRE
+// API REQUEST TO DEEPSEEK
 // --------------------------
 async function askDeepSeek(prompt) {
     const memory = await loadMemory();
@@ -99,7 +167,7 @@ async function askDeepSeek(prompt) {
                     role: "system",
                     content:
                         persona +
-                        "\n\nMémoire du RP (à utiliser comme contexte, ne jamais recopier) :\n" +
+                        "\n\nMémoire du RP (à utiliser comme contexte, ne jamais répéter textuellement) :\n" +
                         memory
                 },
                 { role: "user", content: prompt }
@@ -117,7 +185,7 @@ async function askDeepSeek(prompt) {
 }
 
 // --------------------------
-// BOT LISTENER
+// EVENT LISTENER
 // --------------------------
 client.on("messageCreate", async (msg) => {
     if (msg.author.bot) return;
@@ -126,7 +194,7 @@ client.on("messageCreate", async (msg) => {
 
     const content = msg.content.trim();
 
-    // MODE HORS RP
+    // ---- HORS RP ----
     if (content.toLowerCase().startsWith("ooc:")) {
         msg.channel.sendTyping();
 
@@ -140,8 +208,7 @@ client.on("messageCreate", async (msg) => {
                     messages: [
                         {
                             role: "system",
-                            content:
-                                "Réponds normalement, sans RP, sans style, commence par *hors RP:*."
+                            content: "Réponds normalement, sans RP, commence par *hors RP:*."
                         },
                         { role: "user", content: txt }
                     ]
@@ -155,21 +222,20 @@ client.on("messageCreate", async (msg) => {
             );
 
             return msg.channel.send(res.data.choices[0].message.content);
+
         } catch (e) {
             console.error(e);
             return msg.channel.send("*hors RP:* une erreur s’est glissée…");
         }
     }
 
-    // MODE RP NORMAL
+    // ---- MODE RP ----
     msg.channel.sendTyping();
 
     try {
         const botReply = await askDeepSeek(content);
 
         await msg.channel.send(botReply);
-
-        // Sauvegarde mémoire
         await saveMemory(content, botReply);
 
     } catch (err) {
@@ -182,7 +248,7 @@ client.on("messageCreate", async (msg) => {
 // READY
 // --------------------------
 client.on("ready", () => {
-    console.log("🪦 Ed Gein (DeepSeek + mémoire Redis) veille doucement dans la nuit…");
+    console.log("🪦 Ed Gein (Monster) — silencieux, tremblant, veille sur Hagen…");
 });
 
 client.login(DISCORD_TOKEN);
